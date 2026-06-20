@@ -2,6 +2,7 @@
 venv/
 env/
 ENV/
+.venv
 
 # Python
 __pycache__/
@@ -9,11 +10,22 @@ __pycache__/
 *$py.class
 *.so
 .Python
-
-# Environment Variables
-.env
-.env.local
-.env.*.local
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+PIPFILE.lock
 
 # IDE
 .vscode/
@@ -27,25 +39,66 @@ __pycache__/
 *.db
 *.sqlite
 *.sqlite3
+instance/
+mediguide.db
 
 # Uploads
 uploads/
 temp/
+tmp/
 
 # Logs
 logs/
 *.log
 
-# Dependencies
-dist/
-build/
-*.egg-info/
+# Environment Variables
+.env
+.env.local
+.env.*.local
+.env.prod
 
 # Cache
 .pytest_cache/
 .mypy_cache/
 htmlcov/
+.coverage
+.coverage.*
+.tox/
 
 # OS
 .DS_Store
 Thumbs.db
+.vscode/settings.json
+
+# Node (if using frontend build tools)
+node_modules/
+npm-debug.log
+yarn-error.log
+
+# Testing
+.hypothesis/
+
+# Dependencies
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# pyenv
+.python-version
+
+# Celery
+celerybeat-schedule
+
+# Generated files
+instance/
+.webassets-cache
+*.pyo
+*.pyd
+
+# ML Models (large files)
+ml_models/trained_models/*.pkl
+ml_models/trained_models/*.h5
+ml_models/trained_models/*.pt
+ml_models/trained_models/*.joblib
