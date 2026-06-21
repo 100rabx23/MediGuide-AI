@@ -1,47 +1,69 @@
-from typing import Dict
+import logging
 import os
+from backend.config.settings import settings
+from typing import Optional
+
+logger = logging.getLogger(__name__)
 
 class GeminiAssistant:
-    """Google Gemini API integration for AI assistant"""
+    """Gemini AI Assistant Service"""
     
-    def __init__(self, api_key: str = None):
-        self.api_key = api_key or os.getenv("GEMINI_API_KEY")
-        self.model_name = "gemini-pro"
+    def __init__(self):
+        """Initialize Gemini assistant"""
+        self.api_key = settings.GEMINI_API_KEY
+        self.client = None
+        self._initialize_client()
     
-    def get_response(self, query: str) -> Dict:
-        """Get response from Gemini API"""
-        if not self.api_key:
-            return {
-                "status": "error",
-                "message": "Gemini API key not configured"
-            }
+    def _initialize_client(self):
+        """Initialize Gemini client"""
+        try:
+            if self.api_key:
+                import google.generativeai as genai
+                genai.configure(api_key=self.api_key)
+                self.client = genai.GenerativeModel('gemini-pro')
+                logger.info("Gemini client initialized")
+        except Exception as e:
+            logger.error(f"Error initializing Gemini: {str(e)}")
+    
+    def get_health_advice(self, symptoms: str) -> Optional[str]:
+        """Get health advice from Gemini"""
+        if not self.client:
+            logger.warning("Gemini client not available")
+            return None
         
         try:
-            # Placeholder for actual API call
-            # In production, use: import google.generativeai as genai
-            return {
-                "status": "success",
-                "query": query,
-                "response": "AI Assistant ready. Configure API key for actual responses."
-            }
+            prompt = f"""
+            Based on the following symptoms, provide general health advice and recommendations.
+            Symptoms: {symptoms}
+            
+            IMPORTANT: This is for informational purposes only and not a medical diagnosis.
+            Always recommend consulting with a healthcare professional.
+            """
+            
+            response = self.client.generate_content(prompt)
+            return response.text
         except Exception as e:
-            return {
-                "status": "error",
-                "message": str(e)
-            }
+            logger.error(f"Error getting health advice: {str(e)}")
+            return None
     
-    def answer_health_question(self, question: str) -> str:
+    def answer_health_question(self, question: str) -> Optional[str]:
         """Answer health-related questions"""
-        if not self.api_key:
-            return "Please configure Gemini API key to use this feature."
-        return f"Response to: {question}"
-    
-    def get_recommendations(self, symptoms: list) -> Dict:
-        """Get health recommendations"""
-        return {
-            "recommendations": [],
-            "precautions": [],
-            "lifestyle_changes": []
-        }
-
-gemini_assistant = GeminiAssistant()
+        if not self.client:
+            logger.warning("Gemini client not available")
+            return None
+        
+        try:
+            prompt = f"""
+            Answer the following health-related question. 
+            Provide accurate, helpful information.
+            
+            Question: {question}
+            
+            Note: This is for educational purposes. Always recommend consulting healthcare professionals.
+            """
+            
+            response = self.client.generate_content(prompt)
+            return response.text
+        except Exception as e:
+            logger.error(f"Error answering question: {str(e)}")
+            return None

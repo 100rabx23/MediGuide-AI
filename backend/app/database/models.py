@@ -1,142 +1,133 @@
-from datetime import datetime
-from sqlalchemy import Column, Integer, String, Text, DateTime, Boolean, Float, ForeignKey, Enum
+from sqlalchemy import Column, Integer, String, Text, Float, DateTime, Boolean, ForeignKey, JSON, Enum
 from sqlalchemy.orm import relationship
-from sqlalchemy.sql import func
-from .database import Base
+from datetime import datetime
 import enum
+from backend.app.database.database import Base
 
 class UserRole(str, enum.Enum):
+    """User roles"""
     PATIENT = "patient"
     DOCTOR = "doctor"
     ADMIN = "admin"
 
+class RiskLevel(str, enum.Enum):
+    """Risk levels"""
+    LOW = "low"
+    MEDIUM = "medium"
+    HIGH = "high"
+    CRITICAL = "critical"
+
 class User(Base):
+    """User model"""
     __tablename__ = "users"
     
     id = Column(Integer, primary_key=True, index=True)
-    email = Column(String, unique=True, index=True)
-    username = Column(String, unique=True, index=True)
-    full_name = Column(String)
-    hashed_password = Column(String)
-    is_active = Column(Boolean, default=True)
-    is_verified = Column(Boolean, default=False)
+    username = Column(String(100), unique=True, index=True)
+    email = Column(String(100), unique=True, index=True)
+    hashed_password = Column(String(255))
     role = Column(Enum(UserRole), default=UserRole.PATIENT)
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
     # Relationships
-    patient_profile = relationship("Patient", back_populates="user", uselist=False)
-    doctor_profile = relationship("Doctor", back_populates="user", uselist=False)
-    reports = relationship("Report", back_populates="user")
-    chat_history = relationship("ChatHistory", back_populates="user")
+    patient = relationship("Patient", back_populates="user", uselist=False)
+    doctor = relationship("Doctor", back_populates="user", uselist=False)
+    predictions = relationship("Prediction", back_populates="user")
 
 class Patient(Base):
+    """Patient model"""
     __tablename__ = "patients"
     
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), unique=True)
+    first_name = Column(String(100))
+    last_name = Column(String(100))
     age = Column(Integer)
-    gender = Column(String)
-    blood_type = Column(String)
-    allergies = Column(Text)
+    gender = Column(String(20))
+    blood_group = Column(String(10))
     medical_history = Column(Text)
-    emergency_contact = Column(String)
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    allergies = Column(Text)
+    current_medications = Column(Text)
+    phone = Column(String(20))
+    address = Column(Text)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
-    user = relationship("User", back_populates="patient_profile")
-    symptoms = relationship("Symptom", back_populates="patient")
-    predictions = relationship("DiseasePrediction", back_populates="patient")
+    # Relationships
+    user = relationship("User", back_populates="patient")
+    reports = relationship("Report", back_populates="patient")
 
 class Doctor(Base):
+    """Doctor model"""
     __tablename__ = "doctors"
     
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), unique=True)
-    license_number = Column(String, unique=True)
-    specialization = Column(String)
-    qualification = Column(String)
-    experience_years = Column(Integer)
-    hospital_affiliation = Column(String)
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    first_name = Column(String(100))
+    last_name = Column(String(100))
+    license_number = Column(String(100), unique=True)
+    specialization = Column(String(100))
+    phone = Column(String(20))
+    clinic_name = Column(String(200))
+    clinic_address = Column(Text)
+    verified = Column(Boolean, default=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
     
-    user = relationship("User", back_populates="doctor_profile")
-    observations = relationship("DoctorObservation", back_populates="doctor")
+    # Relationships
+    user = relationship("User", back_populates="doctor")
+    reports = relationship("Report", back_populates="doctor")
 
 class Symptom(Base):
+    """Symptom model"""
     __tablename__ = "symptoms"
     
     id = Column(Integer, primary_key=True, index=True)
-    patient_id = Column(Integer, ForeignKey("patients.id"))
-    symptom_name = Column(String)
+    name = Column(String(100), unique=True, index=True)
     description = Column(Text)
-    duration = Column(String)
-    severity = Column(String)  # mild, moderate, severe
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    
-    patient = relationship("Patient", back_populates="symptoms")
+    category = Column(String(50))
+    severity_levels = Column(JSON)  # Store as JSON
+    related_symptoms = Column(JSON)
+    created_at = Column(DateTime, default=datetime.utcnow)
 
-class DiseasePrediction(Base):
-    __tablename__ = "disease_predictions"
+class Prediction(Base):
+    """Prediction model"""
+    __tablename__ = "predictions"
     
     id = Column(Integer, primary_key=True, index=True)
-    patient_id = Column(Integer, ForeignKey("patients.id"))
-    disease_name = Column(String)
-    confidence_score = Column(Float)
-    rank = Column(Integer)  # 1-5
-    risk_level = Column(String)  # low, medium, high
+    user_id = Column(Integer, ForeignKey("users.id"))
+    symptoms_input = Column(Text)
+    top_5_predictions = Column(JSON)
+    confidence_scores = Column(JSON)
+    risk_level = Column(Enum(RiskLevel), default=RiskLevel.LOW)
     explanation = Column(Text)
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    language = Column(String(10), default="en")
+    created_at = Column(DateTime, default=datetime.utcnow)
     
-    patient = relationship("Patient", back_populates="predictions")
+    # Relationships
+    user = relationship("User", back_populates="predictions")
+    report = relationship("Report", back_populates="prediction", uselist=False)
 
 class Report(Base):
+    """Medical Report model"""
     __tablename__ = "reports"
     
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"))
-    report_type = Column(String)  # symptom_analysis, full_report
-    symptoms_summary = Column(Text)
-    predictions_summary = Column(Text)
+    patient_id = Column(Integer, ForeignKey("patients.id"))
+    doctor_id = Column(Integer, ForeignKey("doctors.id"), nullable=True)
+    prediction_id = Column(Integer, ForeignKey("predictions.id"))
+    title = Column(String(200))
+    content = Column(Text)
     recommendations = Column(Text)
     risk_assessment = Column(Text)
-    pdf_path = Column(String)
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    doctor_observations = Column(Text, nullable=True)
+    pdf_path = Column(String(255), nullable=True)
+    status = Column(String(20), default="pending")  # pending, reviewed, approved
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    reviewed_at = Column(DateTime, nullable=True)
     
-    user = relationship("User", back_populates="reports")
-    observations = relationship("DoctorObservation", back_populates="report")
-
-class DoctorObservation(Base):
-    __tablename__ = "doctor_observations"
-    
-    id = Column(Integer, primary_key=True, index=True)
-    doctor_id = Column(Integer, ForeignKey("doctors.id"))
-    report_id = Column(Integer, ForeignKey("reports.id"))
-    observation_text = Column(Text)
-    recommendation = Column(Text)
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    
-    doctor = relationship("Doctor", back_populates="observations")
-    report = relationship("Report", back_populates="observations")
-
-class ChatHistory(Base):
-    __tablename__ = "chat_history"
-    
-    id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"))
-    user_message = Column(Text)
-    assistant_response = Column(Text)
-    topic = Column(String)  # health_question, recommendation, etc.
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    
-    user = relationship("User", back_populates="chat_history")
-
-class Appointment(Base):
-    __tablename__ = "appointments"
-    
-    id = Column(Integer, primary_key=True, index=True)
-    patient_id = Column(Integer, ForeignKey("patients.id"))
-    doctor_id = Column(Integer, ForeignKey("doctors.id"))
-    appointment_date = Column(DateTime)
-    notes = Column(Text)
-    status = Column(String)  # pending, confirmed, completed, cancelled
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    # Relationships
+    patient = relationship("Patient", back_populates="reports")
+    doctor = relationship("Doctor", back_populates="reports")
+    prediction = relationship("Prediction", back_populates="report")

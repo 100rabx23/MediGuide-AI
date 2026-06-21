@@ -1,65 +1,86 @@
-from fastapi import APIRouter, status
-from pydantic import BaseModel
-from typing import Optional
-from datetime import datetime
+from fastapi import APIRouter, Depends, HTTPException, status, File, UploadFile
+from sqlalchemy.orm import Session
+from backend.app.database.database import get_db
+from backend.app.database.models import Report, Prediction, Patient
+from backend.app.schemas.report import ReportCreate, ReportResponse
+from backend.app.services.report_generator import ReportGenerator
+from typing import List
+import logging
 
-router = APIRouter(prefix="/api/v1/reports", tags=["reports"])
+router = APIRouter(prefix="/reports", tags=["Reports"])
+logger = logging.getLogger(__name__)
 
-class ReportRequest(BaseModel):
-    patient_id: int
-    symptoms_summary: str
-    predictions_summary: Optional[str] = None
+report_gen = ReportGenerator()
 
-class ReportResponse(BaseModel):
-    report_id: int
-    patient_id: int
-    report_type: str
-    created_at: datetime
+@router.post("/", response_model=ReportResponse, status_code=status.HTTP_201_CREATED)
+async def create_report(report: ReportCreate, db: Session = Depends(get_db)):
+    """Create new report"""
+    # Verify prediction exists
+    prediction = db.query(Prediction).filter(Prediction.id == report.prediction_id).first()
+    if not prediction:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Prediction not found"
+        )
+    
+    # Get patient
+    patient = db.query(Patient).filter(Patient.user_id == prediction.user_id).first()
+    if not patient:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Patient not found"
+        )
+    
+    # Create report in database
+    db_report = Report(
+        patient_id=patient.id,
+        prediction_id=prediction.id,
+        title=report.title,
+        content=report.recommendations,
+        recommendations=report.recommendations,
+        risk_assessment=""
+    )
+    
+    db.add(db_report)
+    db.commit()
+    db.refresh(db_report)
+    
+    logger.info(f"Report created: {db_report.id}")
+    return db_report
 
-@router.post("/generate", status_code=status.HTTP_201_CREATED)
-async def generate_report(request: ReportRequest):
-    """Generate medical report"""
-    return {
-        "message": "Report generated successfully",
-        "report_id": 1,
-        "patient_id": request.patient_id,
-        "report_type": "symptom_analysis",
-        "created_at": datetime.now().isoformat()
-    }
-
-@router.get("/{report_id}")
-async def get_report(report_id: int):
-    """Get specific report"""
-    return {
-        "report_id": report_id,
-        "status": "pending",
-        "patient_id": 1,
-        "created_at": datetime.now().isoformat()
-    }
-
-@router.get("/download/{report_id}")
-async def download_report(report_id: int):
-    """Download report as PDF"""
-    return {
-        "message": "PDF generation in progress",
-        "report_id": report_id,
-        "download_url": f"/reports/pdf/{report_id}"
-    }
-
-@router.get("/patient/{patient_id}")
-async def get_patient_reports(patient_id: int):
+@router.get("/patient/{patient_id}", response_model=List[ReportResponse])
+async def get_patient_reports(patient_id: int, db: Session = Depends(get_db)):
     """Get all reports for a patient"""
-    return {
-        "patient_id": patient_id,
-        "reports": []
-    }
+    reports = db.query(Report).filter(Report.patient_id == patient_id).all()
+    return reports
 
-@router.delete("/{report_id}")
-async def delete_report(report_id: int):
-    """Delete a report"""
-    return {"message": "Report deleted successfully"}
+@router.get("/{report_id}", response_model=ReportResponse)
+async def get_report(report_id: int, db: Session = Depends(get_db)):
+    """Get report by ID"""
+    report = db.query(Report).filter(Report.id == report_id).first()
+    if not report:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Report not found"
+        )
+    return report
 
-@router.put("/{report_id}")
-async def update_report(report_id: int, request: ReportRequest):
-    """Update a report"""
-    return {"message": "Report updated successfully"}
+@router.post("/{report_id}/download")
+async def download_report(report_id: int, db: Session = Depends(get_db)):
+    """Download report as PDF"""
+    report = db.query(Report).filter(Report.id == report_id).first()
+    if not report:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Report not found"
+        )
+    
+    try:
+        pdf_path = report_gen.generate_pdf(report)
+        return {"pdf_path": pdf_path, "status": "success"}
+    except Exception as e:
+        logger.error(f"Error generating PDF: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Error generating PDF"
+        )

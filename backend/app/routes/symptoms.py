@@ -1,59 +1,45 @@
-from fastapi import APIRouter, status, HTTPException
-from pydantic import BaseModel
-from typing import List, Optional
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.orm import Session
+from backend.app.database.database import get_db
+from backend.app.database.models import Symptom
+from backend.app.schemas.symptom import SymptomCreate, SymptomResponse
+from typing import List
+import logging
 
-router = APIRouter(prefix="/api/v1/symptoms", tags=["symptoms"])
+router = APIRouter(prefix="/symptoms", tags=["Symptoms"])
+logger = logging.getLogger(__name__)
 
-class SymptomRequest(BaseModel):
-    symptoms: List[str]
-    duration: str = "recent"
-    severity: str = "moderate"
+@router.get("/", response_model=List[SymptomResponse])
+async def get_symptoms(db: Session = Depends(get_db)):
+    """Get all symptoms"""
+    symptoms = db.query(Symptom).all()
+    return symptoms
 
-class SymptomResponse(BaseModel):
-    symptom_id: int
-    symptom_name: str
-    severity: str
+@router.get("/{symptom_id}", response_model=SymptomResponse)
+async def get_symptom(symptom_id: int, db: Session = Depends(get_db)):
+    """Get symptom by ID"""
+    symptom = db.query(Symptom).filter(Symptom.id == symptom_id).first()
+    if not symptom:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Symptom not found"
+        )
+    return symptom
 
-@router.post("/analyze", status_code=status.HTTP_200_OK)
-async def analyze_symptoms(request: SymptomRequest):
-    """Analyze symptoms and extract data"""
-    return {
-        "message": "Symptoms analyzed",
-        "symptoms_count": len(request.symptoms),
-        "symptoms": request.symptoms,
-        "duration": request.duration,
-        "severity": request.severity,
-        "status": "pending_prediction"
-    }
+@router.post("/", response_model=SymptomResponse, status_code=status.HTTP_201_CREATED)
+async def create_symptom(symptom: SymptomCreate, db: Session = Depends(get_db)):
+    """Create new symptom"""
+    db_symptom = Symptom(**symptom.dict())
+    db.add(db_symptom)
+    db.commit()
+    db.refresh(db_symptom)
+    return db_symptom
 
-@router.post("/extract")
-async def extract_symptoms(text: str):
-    """Extract symptoms from natural language text"""
-    # In real implementation, use NLP to extract symptoms
-    return {
-        "original_text": text,
-        "extracted_symptoms": [],
-        "confidence": 0.0
-    }
-
-@router.get("/history/{patient_id}")
-async def get_symptom_history(patient_id: int):
-    """Get patient symptom history"""
-    return {
-        "patient_id": patient_id,
-        "symptoms": []
-    }
-
-@router.post("/record/{patient_id}")
-async def record_symptom(patient_id: int, request: SymptomRequest):
-    """Record new symptom for patient"""
-    return {
-        "message": "Symptom recorded",
-        "patient_id": patient_id,
-        "symptoms": request.symptoms
-    }
-
-@router.delete("/delete/{symptom_id}")
-async def delete_symptom(symptom_id: int):
-    """Delete a symptom record"""
-    return {"message": "Symptom deleted successfully"}
+@router.get("/search/{query}")
+async def search_symptoms(query: str, db: Session = Depends(get_db)):
+    """Search symptoms by name or description"""
+    symptoms = db.query(Symptom).filter(
+        (Symptom.name.ilike(f"%{query}%")) | 
+        (Symptom.description.ilike(f"%{query}%"))
+    ).all()
+    return symptoms

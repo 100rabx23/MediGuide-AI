@@ -1,86 +1,70 @@
-from fastapi import APIRouter, status
-from pydantic import BaseModel
-from typing import List, Optional
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.orm import Session
+from backend.app.database.database import get_db
+from backend.app.database.models import User, Doctor
+import logging
 
-router = APIRouter(prefix="/api/v1/admin", tags=["admin"])
-
-class UserStats(BaseModel):
-    total_users: int
-    total_patients: int
-    total_doctors: int
-    total_admins: int
-
-class AnalyticsData(BaseModel):
-    daily_reports: int
-    top_diseases: List[str]
-    avg_confidence: float
-
-@router.get("/dashboard")
-async def get_admin_dashboard():
-    """Get admin dashboard statistics"""
-    return {
-        "total_users": 0,
-        "total_patients": 0,
-        "total_doctors": 0,
-        "total_reports": 0,
-        "active_sessions": 0
-    }
-
-@router.get("/analytics")
-async def get_analytics(days: Optional[int] = 7):
-    """Get system analytics"""
-    return {
-        "message": "Analytics data",
-        "period_days": days,
-        "daily_reports": 0,
-        "top_diseases": [],
-        "user_growth": [],
-        "system_health": "healthy"
-    }
+router = APIRouter(prefix="/admin", tags=["Admin"])
+logger = logging.getLogger(__name__)
 
 @router.get("/users")
-async def list_users(skip: int = 0, limit: int = 100):
-    """List all users"""
+async def get_all_users(db: Session = Depends(get_db)):
+    """Get all users (admin only)"""
+    users = db.query(User).all()
     return {
-        "users": [],
-        "total": 0,
-        "skip": skip,
-        "limit": limit
+        "total": len(users),
+        "users": users
     }
 
-@router.get("/users/{user_id}")
-async def get_user_details(user_id: int):
-    """Get user details"""
+@router.get("/doctors")
+async def get_all_doctors(db: Session = Depends(get_db)):
+    """Get all doctors (admin only)"""
+    doctors = db.query(Doctor).all()
     return {
-        "user_id": user_id,
-        "user_data": {}
+        "total": len(doctors),
+        "doctors": doctors
     }
 
-@router.post("/users/{user_id}/activate")
-async def activate_user(user_id: int):
-    """Activate user account"""
-    return {"message": "User activated successfully"}
+@router.post("/doctors/{doctor_id}/verify")
+async def verify_doctor(doctor_id: int, db: Session = Depends(get_db)):
+    """Verify doctor (admin only)"""
+    doctor = db.query(Doctor).filter(Doctor.id == doctor_id).first()
+    if not doctor:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Doctor not found"
+        )
+    
+    doctor.verified = True
+    db.commit()
+    
+    logger.info(f"Doctor verified: {doctor_id}")
+    return {"status": "success", "message": "Doctor verified successfully"}
 
 @router.post("/users/{user_id}/deactivate")
-async def deactivate_user(user_id: int):
-    """Deactivate user account"""
-    return {"message": "User deactivated successfully"}
+async def deactivate_user(user_id: int, db: Session = Depends(get_db)):
+    """Deactivate user (admin only)"""
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found"
+        )
+    
+    user.is_active = False
+    db.commit()
+    
+    logger.info(f"User deactivated: {user_id}")
+    return {"status": "success", "message": "User deactivated successfully"}
 
-@router.get("/disease-stats")
-async def get_disease_statistics():
-    """Get disease statistics"""
+@router.get("/analytics")
+async def get_analytics(db: Session = Depends(get_db)):
+    """Get system analytics (admin only)"""
+    total_users = db.query(User).count()
+    total_doctors = db.query(Doctor).count()
+    
     return {
-        "top_diseases": [],
-        "disease_counts": {},
-        "trend": []
-    }
-
-@router.get("/system-health")
-async def get_system_health():
-    """Get system health status"""
-    return {
-        "status": "healthy",
-        "database": "connected",
-        "api": "operational",
-        "uptime": "100%"
+        "total_users": total_users,
+        "total_doctors": total_doctors,
+        "timestamp": "now()"
     }

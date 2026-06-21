@@ -1,70 +1,72 @@
-from fastapi import APIRouter, status
-from pydantic import BaseModel
-from typing import Optional
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.orm import Session
+from backend.app.database.database import get_db
+from backend.app.database.models import Doctor, Report, User
+from backend.app.schemas.doctor import DoctorCreate, DoctorResponse
+from typing import List
+import logging
 
-router = APIRouter(prefix="/api/v1/doctor", tags=["doctor"])
+router = APIRouter(prefix="/doctor", tags=["Doctor"])
+logger = logging.getLogger(__name__)
 
-class ObservationRequest(BaseModel):
-    report_id: int
-    observation_text: str
-    recommendation: str
+@router.post("/register", response_model=DoctorResponse, status_code=status.HTTP_201_CREATED)
+async def register_doctor(doctor: DoctorCreate, user_id: int, db: Session = Depends(get_db)):
+    """Register doctor profile"""
+    # Verify user exists
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found"
+        )
+    
+    # Check if doctor already exists
+    db_doctor = db.query(Doctor).filter(Doctor.license_number == doctor.license_number).first()
+    if db_doctor:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Doctor with this license number already exists"
+        )
+    
+    # Create doctor profile
+    db_doctor = Doctor(**doctor.dict(), user_id=user_id)
+    db.add(db_doctor)
+    db.commit()
+    db.refresh(db_doctor)
+    
+    logger.info(f"Doctor registered: {doctor.license_number}")
+    return db_doctor
 
-class DoctorObservationResponse(BaseModel):
-    observation_id: int
-    report_id: int
-    doctor_id: int
-    observation_text: str
-    recommendation: str
+@router.get("/profile/{doctor_id}", response_model=DoctorResponse)
+async def get_doctor(doctor_id: int, db: Session = Depends(get_db)):
+    """Get doctor profile"""
+    doctor = db.query(Doctor).filter(Doctor.id == doctor_id).first()
+    if not doctor:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Doctor not found"
+        )
+    return doctor
 
-@router.get("/patients/{doctor_id}")
-async def get_doctor_patients(doctor_id: int):
-    """Get list of patients for a doctor"""
-    return {
-        "doctor_id": doctor_id,
-        "patients": [],
-        "total_patients": 0
-    }
+@router.get("/reports/{doctor_id}", response_model=List)
+async def get_doctor_reports(doctor_id: int, db: Session = Depends(get_db)):
+    """Get all reports assigned to doctor"""
+    reports = db.query(Report).filter(Report.doctor_id == doctor_id).all()
+    return reports
 
-@router.post("/observations", status_code=status.HTTP_201_CREATED)
-async def add_observation(request: ObservationRequest):
-    """Add doctor observation to report"""
-    return {
-        "message": "Observation added successfully",
-        "observation_id": 1,
-        "report_id": request.report_id,
-        "doctor_id": 1
-    }
-
-@router.get("/dashboard/{doctor_id}")
-async def get_doctor_dashboard(doctor_id: int):
-    """Get doctor dashboard statistics"""
-    return {
-        "doctor_id": doctor_id,
-        "total_patients": 0,
-        "pending_reports": 0,
-        "completed_reports": 0,
-        "recent_observations": []
-    }
-
-@router.get("/reports/{doctor_id}")
-async def get_doctor_reports(doctor_id: int, status: Optional[str] = None):
-    """Get reports assigned to doctor"""
-    return {
-        "doctor_id": doctor_id,
-        "reports": [],
-        "total_reports": 0
-    }
-
-@router.get("/observations/{doctor_id}")
-async def get_doctor_observations(doctor_id: int):
-    """Get all observations by doctor"""
-    return {
-        "doctor_id": doctor_id,
-        "observations": [],
-        "total_observations": 0
-    }
-
-@router.post("/schedule-appointment")
-async def schedule_appointment(patient_id: int, doctor_id: int, date_time: str):
-    """Schedule appointment"""
-    return {"message": "Appointment scheduled successfully"}
+@router.put("/{report_id}/review")
+async def review_report(report_id: int, observations: str, db: Session = Depends(get_db)):
+    """Doctor reviews and adds observations to a report"""
+    report = db.query(Report).filter(Report.id == report_id).first()
+    if not report:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Report not found"
+        )
+    
+    report.doctor_observations = observations
+    report.status = "reviewed"
+    db.commit()
+    
+    logger.info(f"Report reviewed: {report_id}")
+    return {"status": "success", "message": "Report reviewed successfully"}
