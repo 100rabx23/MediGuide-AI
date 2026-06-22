@@ -3,6 +3,8 @@ from sqlalchemy.orm import declarative_base, sessionmaker
 from backend.config.settings import settings
 import logging
 
+
+#
 logger = logging.getLogger(__name__)
 
 # Create database engine
