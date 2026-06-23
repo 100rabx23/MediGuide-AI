@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from backend.app.database.database import get_db
 from backend.app.database.models import User, Doctor
 import logging
-
+#import Docker as dc
 router = APIRouter(prefix="/admin", tags=["Admin"])
 logger = logging.getLogger(__name__)
 
