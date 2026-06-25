@@ -2,7 +2,10 @@ import logging
 import os
 import sys
 from pathlib import Path
-₹124
+
+
+
+
 # Add parent directory to Python
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
