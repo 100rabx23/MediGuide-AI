@@ -5,7 +5,7 @@ from pathlib import Path
 
 
 
-
+#1*2
 # Add parent
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
@@ -19,6 +19,9 @@ from backend.app.database.database import Base, engine
 
 # Load environment variables
 load_dotenv()
+
+
+#23222
 
 # Configure logging
 logging.basicConfig(
