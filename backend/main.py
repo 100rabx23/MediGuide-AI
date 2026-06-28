@@ -6,7 +6,7 @@ from pathlib import Path
 
 
 
-# Add parent directory to Python
+# Add parentto Python
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from fastapi import FastAPI
