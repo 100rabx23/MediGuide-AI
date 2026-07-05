@@ -9,7 +9,7 @@ MediGuide AI is a comprehensive B.Tech final-year project that combines **Artifi
 This system is designed as a pre-diagnosis and decision-support assistant. It does NOT provide medical diagnoses. Always consult with healthcare professionals for proper medical diagnosis and treatment.
 
 ## 🎯 Key Features
-
+.
 ### Core Functionality
 - ✅ **Symptom Analysis**: Text and voice input processing
 - ✅ **Disease Prediction**: Top 5 most likely conditions with confidence scores
